@@ -11,23 +11,28 @@ INDEX_FILE = "apiindex.json"
 
 class QxAutoCompleteCommand(sublime_plugin.EventListener):
     def __init__(self):
-        self.apidata = self._getData()
+        self.apidata = self.getData()
 
-    def _getData(self):
+    def getData(self):
         if os.path.isfile(INDEX_FILE):
-            fileObj = open(INDEX_FILE)
-            data = json.load(fileObj)
             if DEBUG:
                 print "Loading API data from file"
+            fileObj = open(INDEX_FILE)
+            data = json.load(fileObj)
         else:
-            indexFile = urllib.urlopen(API_URL)
-            index = indexFile.read()
-            index = json.loads(index)
-            data = index["__fullNames__"]
             if DEBUG:
                 print "Loading API data from URL"
+            data = self.loadData()
             fileObj = open(INDEX_FILE, "w+")
             json.dump(data, fileObj)
+
+        return data
+
+    def loadData(self):
+        indexFile = urllib.urlopen(API_URL)
+        index = indexFile.read()
+        index = json.loads(index)
+        data = index["__fullNames__"]
 
         return data
 
