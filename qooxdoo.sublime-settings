@@ -1,0 +1,8 @@
+{
+  "autocomplete_debug" : false,
+
+  "autocomplete_api_paths" : {
+    "qx": "/home/dwagner/workspace/qooxdoo.git/framework/api/script/apiindex.json"
+    //"qx": "http://demo.qooxdoo.org/current/apiviewer/script/apiindex.json"
+  }
+}
