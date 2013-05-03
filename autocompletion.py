@@ -66,9 +66,10 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
                     # Extract the final part of the class name from the query
                     classApi = self.getClassApi(queryClass)
                     for entry in classApi:
-                        if prefix in entry:
-                            methodName = queryClass + "." + entry
-                            result.append((methodName, methodName))
+                        if prefix in entry[0]:
+                            methodName = queryClass + "." + entry[0]
+                            methodWithParams = methodName + "(%s)" % ", ".join(entry[1])
+                            result.append((methodName, methodWithParams))
 
                 elif className.startswith(lineText):
                     # query is a partial class name
@@ -80,6 +81,7 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
                     result.append((className, completion))
 
         if len(result) > 0:
+            result.sort()
             return (result, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS)
         else:
             return result
@@ -105,5 +107,19 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
             for child in classData["children"]:
                 if "type" in child and child["type"] == "methods-static":
                     for method in child["children"]:
-                        statics.append(method["attributes"]["name"])
+                        methodName = method["attributes"]["name"]
+                        if methodName[:2] != "__":
+                            params = self.getMethodParams(method)
+                            statics.append((methodName, params))
         return statics
+
+    def getMethodParams(self, method):
+        params = []
+        if "children" in method:
+            for child in method["children"]:
+                if "type" in child and child["type"] == "params":
+                    if "children" in child:
+                        for param in child["children"]:
+                            if "attributes" in param and "name" in param["attributes"]:
+                                params.append(param["attributes"]["name"])
+        return params
