@@ -59,26 +59,42 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
         if queryClass:
             queryClass = queryClass.group(1)
 
-        if len(result) == 0:
-            for className in self.apidata:
-                if queryClass and queryClass == className:
-                    # the query is a fully qualified class name
-                    # Extract the final part of the class name from the query
-                    classApi = self.getClassApi(queryClass)
-                    for entry in classApi:
-                        if prefix in entry[0]:
-                            methodName = queryClass + "." + entry[0]
-                            methodWithParams = methodName + "(%s)" % ", ".join(entry[1])
-                            result.append((methodName, methodWithParams))
+        for className in self.apidata:
+            if queryClass and queryClass == className:
+                # the query is a fully qualified class name
+                # Extract the final part of the class name from the query
+                classApi = self.getClassApi(queryClass)
+                statics = self.getStaticMethods(classApi)
+                for entry in statics:
+                    if prefix in entry[0]:
+                        methodName = queryClass + "." + entry[0]
+                        methodWithParams = methodName + "(%s)" % ", ".join(entry[1])
+                        result.append((methodName, methodWithParams))
 
-                elif className.startswith(lineText):
-                    # query is a partial class name
-                    completion = prefix + className[len(lineText):]
-                    if len(prefix) == 1 and prefix[0].isupper():
-                        completion = className
-                    if self.debug:
-                        print "prefix: %s, lineText: %s, className %s, completion: %s" % (prefix, lineText, className, completion)
-                    result.append((className, completion))
+            elif className.startswith(lineText):
+                params = []
+                isClass = className.split(".")[-1].istitle()
+                isStatic = True
+                if isClass:
+                    # TODO: this takes too long for namespaces with lots of classes
+                    # If possible, do this only if a completion is selected
+                    # the match is a class, get the constructor params
+                    classApi = self.getClassApi(className)
+                    constructor = self.getConstructor(classApi)
+                    if constructor:
+                        isStatic = False
+                        params = self.getMethodParams(constructor)
+
+                # query is a partial class name
+                completion = prefix + className[len(lineText):]
+                if len(prefix) == 1:
+                    completion = className
+                if isClass and not isStatic:
+                    completion = completion + "(%s)" % ", ".join(params)
+                if self.debug:
+                    print "prefix: %s, lineText: %s, className %s, completion: %s" % (prefix, lineText, className, completion)
+
+                result.append((className, completion))
 
         if len(result) > 0:
             result.sort()
@@ -88,7 +104,7 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
 
     def getClassApi(self, className):
         if className in self.classApi:
-            return self.getStaticMethods(self.classApi[className])
+            return self.classApi[className]
 
         apiPaths = self.settings.get("autocomplete_api_paths")
         for path in apiPaths:
@@ -96,7 +112,7 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
             if os.path.isfile(classPath):
                 classData = json.load(open(classPath))
                 self.classApi[className] = classData
-                return self.getStaticMethods(classData)
+                return classData
         if self.debug:
             print "Couldn't load class API for " + className
         return []
@@ -112,6 +128,16 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
                             params = self.getMethodParams(method)
                             statics.append((methodName, params))
         return statics
+
+    def getConstructor(self, classData):
+        if "children" in classData:
+            for child in classData["children"]:
+                if "type" in child and child["type"] == "constructor":
+                    if "children" in child:
+                        for c in child["children"]:
+                            if "type" in c and c["type"] == "method":
+                                return c
+        return None
 
     def getMethodParams(self, method):
         params = []
