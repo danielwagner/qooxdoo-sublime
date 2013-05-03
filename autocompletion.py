@@ -48,13 +48,12 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
             return []
 
         # get the line text from the cursor back to last space
-        # TODO: Support tabs as well
         result = []
         sel = view.sel()
         region = sel[0]
         line = view.line(region)
         lineText = view.substr(line)
-        lineText = lineText.strip().rsplit(" ")[-1]
+        lineText = re.split('\s', lineText)[-1]
 
         queryClass = re.search("(.*?[A-Z]\w*)", lineText)
         if queryClass:
