@@ -1,57 +1,37 @@
 import sublime
 import sublime_plugin
 import json
-import urllib
 import os
+import re
 
 
 class QxAutoCompleteCommand(sublime_plugin.EventListener):
     def __init__(self):
         self.settings = sublime.load_settings("qooxdoo.sublime-settings")
         self.debug = self.settings.get("autocomplete_debug")
-
         self.apidata = self.getData()
+        self.classApi = {}
 
     def getData(self):
-        data = {}
+        data = []
         apiPaths = self.settings.get("autocomplete_api_paths")
-        for lib, path in apiPaths.iteritems():
+        for path in apiPaths:
+            path = os.path.join(path, "apiindex.json")
             libData = None
-            cachePath = os.path.abspath("api_cache")
-            indexFile = os.path.join(cachePath, "apiindex_" + lib + ".json")
 
-            if os.path.isfile(indexFile):
+            if os.path.isfile(path):
                 if self.debug:
-                    print "Loading cached %s API data from file %s" % (lib, indexFile)
-                fileObj = open(indexFile)
-                libData = json.load(fileObj)
+                    print "Collecting API data from file system path %s" % (path)
+                libData = self.loadDataFromFile(path)
             else:
-                if os.path.isfile(path):
-                    if self.debug:
-                        print "Collecting %s API data from file system path %s" % (lib, path)
-                    libData = self.loadDataFromFile(path)
-                else:
-                    if self.debug:
-                        print "Collecting %s API data from URL %s" % (lib, path)
-                    libData = self.loadDataFromUrl(path)
+                if self.debug:
+                    print "Couldn't load API data: %s does not exist!" % path
+                continue
 
-                if libData:
-                    if self.debug:
-                        print "Writing %s API data cache to file %s" % (lib, indexFile)
-                    if not os.path.isdir(cachePath):
-                        os.makedirs(cachePath)
-                    fileObj = open(indexFile, "w+")
-                    json.dump(libData, fileObj)
-
-            data[lib] = libData
-
-        return data
-
-    def loadDataFromUrl(self, url):
-        indexFile = urllib.urlopen(url)
-        index = indexFile.read()
-        index = json.loads(index)
-        data = index["__fullNames__"]
+            if libData:
+                for entry in libData:
+                    if not entry in data:
+                        data.append(entry)
 
         return data
 
@@ -67,20 +47,36 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
         if not view.match_selector(locations[0], "source.js"):
             return []
 
+        # get the line text from the cursor back to last space
+        # TODO: Support tabs as well
+        result = []
         sel = view.sel()
         region = sel[0]
         line = view.line(region)
         lineText = view.substr(line)
         lineText = lineText.strip().rsplit(" ")[-1]
 
-        result = []
-        for lib in self.apidata:
-            for className in self.apidata[lib]:
-                if className.startswith(lineText):
+        queryClass = re.search("(.*?[A-Z]\w*)", lineText)
+        if queryClass:
+            queryClass = queryClass.group(1)
+
+        if len(result) == 0:
+            for className in self.apidata:
+                if queryClass and queryClass == className:
+                    # the query is a fully qualified class name
+                    # Extract the final part of the class name from the query
+                    classApi = self.getClassApi(queryClass)
+                    for entry in classApi:
+                        if prefix in entry:
+                            methodName = queryClass + "." + entry
+                            result.append((methodName, methodName))
+
+                elif className.startswith(lineText):
+                    # query is a partial class name
                     completion = prefix + className[len(lineText):]
                     if len(prefix) == 1 and prefix[0].isupper():
                         completion = className
-                    if True or self.debug:
+                    if self.debug:
                         print "prefix: %s, lineText: %s, className %s, completion: %s" % (prefix, lineText, className, completion)
                     result.append((className, completion))
 
@@ -88,3 +84,27 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
             return (result, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS)
         else:
             return result
+
+    def getClassApi(self, className):
+        if className in self.classApi:
+            return self.getStaticMethods(self.classApi[className])
+
+        apiPaths = self.settings.get("autocomplete_api_paths")
+        for path in apiPaths:
+            classPath = os.path.join(path, className + ".json")
+            if os.path.isfile(classPath):
+                classData = json.load(open(classPath))
+                self.classApi[className] = classData
+                return self.getStaticMethods(classData)
+        if self.debug:
+            print "Couldn't load class API for " + className
+        return []
+
+    def getStaticMethods(self, classData):
+        statics = []
+        if "children" in classData:
+            for child in classData["children"]:
+                if "type" in child and child["type"] == "methods-static":
+                    for method in child["children"]:
+                        statics.append(method["attributes"]["name"])
+        return statics
