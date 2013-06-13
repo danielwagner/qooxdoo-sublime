@@ -78,7 +78,8 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
                 isStatic = True
                 queryDepth = len(lineText.split("."))
                 matchDepth = len(className.split("."))
-                if isClass and queryDepth == matchDepth - 1:
+
+                if isClass and (queryDepth >= matchDepth - 1):
                     # the match is a class, get the constructor params
                     classApi = self.getClassApi(className)
                     constructor = self.getConstructor(classApi)
