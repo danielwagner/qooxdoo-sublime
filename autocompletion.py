@@ -87,7 +87,9 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
 
                 # query is a partial class name
                 completion = prefix + className[len(lineText):]
-                if len(prefix) == 1:
+                # If there's no dot (or maybe word boundary?) in the completion,
+                # Sublime will replace the entire lineText so we need the full name
+                if not "." in completion:
                     completion = className
                 if isClass and not isStatic:
                     completion = completion + "(%s)" % ", ".join(params)
