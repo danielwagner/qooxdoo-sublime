@@ -73,11 +73,12 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
 
             elif className.startswith(lineText):
                 params = []
-                isClass = className.split(".")[-1].istitle()
+                namespace = className.split(".")
+                isClass = namespace[-1].istitle()
                 isStatic = True
-                if isClass:
-                    # TODO: this takes too long for namespaces with lots of classes
-                    # If possible, do this only if a completion is selected
+                queryDepth = len(lineText.split("."))
+                matchDepth = len(className.split("."))
+                if isClass and queryDepth == matchDepth - 1:
                     # the match is a class, get the constructor params
                     classApi = self.getClassApi(className)
                     constructor = self.getConstructor(classApi)
