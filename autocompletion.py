@@ -38,6 +38,9 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
                 for entry in statics:
                     if prefix in entry[0]:
                         methodName = queryClass + "." + entry[0]
+                        if len(entry[1]) > 0:
+                            # place the cursor before the first parameter and select it
+                            entry[1][0] = "${1:%s}" % entry[1][0]
                         methodWithParams = methodName + "(%s)" % ", ".join(entry[1])
                         result.append((methodName, methodWithParams))
 
@@ -64,6 +67,9 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
                 if not "." in completion:
                     completion = className
                 if isClass and not isStatic:
+                    if len(params) > 0:
+                        # place the cursor before the first parameter and select it
+                        params[0] = "${1:%s}" % params[0]
                     completion = completion + "(%s)" % ", ".join(params)
                 if self.debug:
                     print "prefix: %s, lineText: %s, className %s, completion: %s" % (prefix, lineText, className, completion)
