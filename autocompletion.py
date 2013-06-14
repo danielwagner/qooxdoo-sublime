@@ -9,38 +9,8 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
     def __init__(self):
         self.settings = sublime.load_settings("qooxdoo.sublime-settings")
         self.debug = self.settings.get("autocomplete_debug")
-        self.apidata = self.getData()
-        self.classApi = {}
-
-    def getData(self):
-        data = []
-        apiPaths = self.settings.get("autocomplete_api_paths")
-        for path in apiPaths:
-            path = os.path.join(path, "apiindex.json")
-            libData = None
-
-            if os.path.isfile(path):
-                if self.debug:
-                    print "Collecting API data from file system path %s" % (path)
-                libData = self.loadDataFromFile(path)
-            else:
-                if self.debug:
-                    print "Couldn't load API data: %s does not exist!" % path
-                continue
-
-            if libData:
-                for entry in libData:
-                    if not entry in data:
-                        data.append(entry)
-
-        return data
-
-    def loadDataFromFile(self, path):
-        indexFile = open(path)
-        index = json.load(indexFile)
-        data = index["__fullNames__"]
-
-        return data
+        self.qxApi = QxApi(self.settings.get("autocomplete_api_paths"))
+        self.qxApi.debug = self.debug
 
     def on_query_completions(self, view, prefix, locations):
         # Only trigger within JS
@@ -59,12 +29,12 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
         if queryClass:
             queryClass = queryClass.group(1)
 
-        for className in self.apidata:
+        for className in self.qxApi.getData():
             if queryClass and queryClass == className:
                 # the query is a fully qualified class name
                 # Extract the final part of the class name from the query
-                classApi = self.getClassApi(queryClass)
-                statics = self.getStaticMethods(classApi)
+                classApi = self.qxApi.getClassApi(queryClass)
+                statics = self.qxApi.getStaticMethods(classApi)
                 for entry in statics:
                     if prefix in entry[0]:
                         methodName = queryClass + "." + entry[0]
@@ -81,11 +51,11 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
 
                 if isClass and (queryDepth >= matchDepth - 1):
                     # the match is a class, get the constructor params
-                    classApi = self.getClassApi(className)
-                    constructor = self.getConstructor(classApi)
+                    classApi = self.qxApi.getClassApi(className)
+                    constructor = self.qxApi.getConstructor(classApi)
                     if constructor:
                         isStatic = False
-                        params = self.getMethodParams(constructor)
+                        params = self.qxApi.getMethodParams(constructor)
 
                 # query is a partial class name
                 completion = prefix + className[len(lineText):]
@@ -106,16 +76,58 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
         else:
             return result
 
-    def getClassApi(self, className):
-        if className in self.classApi:
-            return self.classApi[className]
 
-        apiPaths = self.settings.get("autocomplete_api_paths")
-        for path in apiPaths:
+class QxApi():
+    def __init__(self, apiPaths):
+        self.debug = False
+        self.__apiPaths = apiPaths
+        self.__classApi = {}
+        self.__apiData = None
+
+    def getData(self):
+        if not self.__apiData:
+            self.__apiData = self._getData()
+
+        return self.__apiData
+
+    def _getData(self):
+        data = []
+        for path in self.__apiPaths:
+            path = os.path.join(path, "apiindex.json")
+            libData = None
+
+            if os.path.isfile(path):
+                if self.debug:
+                    print "Collecting API data from file system path %s" % (path)
+                libData = self._loadDataFromFile(path)
+            else:
+                if self.debug:
+                    print "Couldn't load API data: %s does not exist!" % path
+                continue
+
+            if libData:
+                for entry in libData:
+                    if not entry in data:
+                        data.append(entry)
+
+        return data
+
+    def _loadDataFromFile(self, path):
+        indexFile = open(path)
+        index = json.load(indexFile)
+        data = index["__fullNames__"]
+
+        return data
+
+    def getClassApi(self, className):
+        if className in self.__classApi:
+            return self.__classApi[className]
+
+        for path in self.__apiPaths:
             classPath = os.path.join(path, className + ".json")
             if os.path.isfile(classPath):
                 classData = json.load(open(classPath))
-                self.classApi[className] = classData
+                self.__classApi[className] = classData
                 return classData
         if self.debug:
             print "Couldn't load class API for " + className
