@@ -1,5 +1,9 @@
 {
   "autocomplete_debug" : false,
 
-  "autocomplete_api_paths" : ["/home/dwagner/workspace/qooxdoo.git/framework/api/script"]
+  "autocomplete_api_paths" : [
+    // API data directories for any qooxdoo library
+    "/home/username/workspace/qooxdoo.git/framework/api/script"
+    //,"/home/username/workspace/myapplication/api/script"
+  ]
 }
