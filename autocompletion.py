@@ -99,16 +99,16 @@ class QxApi():
     def _getData(self):
         data = []
         for path in self.__apiPaths:
-            path = os.path.join(path, "apiindex.json")
+            indexPath = os.path.join(path, "apiindex.json")
             libData = None
 
-            if os.path.isfile(path):
+            if os.path.isfile(indexPath):
                 if self.debug:
-                    print "Collecting API data from file system path %s" % (path)
-                libData = self._loadDataFromFile(path)
+                    print "Collecting API data from file system path %s" % (indexPath)
+                libData = self._loadDataFromFile(indexPath)
             else:
-                if self.debug:
-                    print "Couldn't load API data: %s does not exist!" % path
+                sublime.error_message("Couldn't load API data: %s does not exist!\nPlease make sure the correct path is configured in Packages/qooxdoo-sublime/qooxdoo.sublime-settings and API data has been generated for the qx library (generate.py api)." % indexPath)
+                self.__apiPaths.remove(path)
                 continue
 
             if libData:
