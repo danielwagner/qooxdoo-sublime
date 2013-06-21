@@ -1,9 +1,14 @@
 {
-  "autocomplete_debug" : false,
+  // qooxdoo libraries to be scanned for API data (used in autocompletions)
+  // the values must be directories containing the lib's Manifest.json file
+  "libraries" : {
+    /*
+    "qooxdoo": "/home/username/workspace/qooxdoo-2.1.1-sdk/framework",
+    "myapplication": "/home/username/workspace/myapplication"
+    */
+  },
 
-  "autocomplete_api_paths" : [
-    // API data directories for any qooxdoo library
-    "/home/username/workspace/qooxdoo.git/framework/api/script"
-    //,"/home/username/workspace/myapplication/api/script"
+  "debug" : [
+    //"AutoCompletion", "Api", "LibraryUtil"
   ]
 }

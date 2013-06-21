@@ -4,17 +4,43 @@ import json
 import os
 import re
 
+settings = sublime.load_settings("qooxdoo.sublime-settings")
 
-class QxAutoCompleteCommand(sublime_plugin.EventListener):
+
+class AutoCompletion(sublime_plugin.EventListener):
     def __init__(self):
-        self.settings = sublime.load_settings("qooxdoo.sublime-settings")
-        self.debug = self.settings.get("autocomplete_debug")
-        self.qxApi = QxApi(self.settings.get("autocomplete_api_paths"))
-        self.qxApi.debug = self.debug
+        self.debug = "AutoCompletion" in settings.get("debug")
+        self.__qxApi = None
+
+    def _getApi(self):
+        if not self.__qxApi:
+            qxLibs = settings.get("libraries")
+            if not qxLibs or len(qxLibs) == 0:
+                if self.debug:
+                    print "No libraries configured in qooxdoo.sublime-settings, scanning project folders."
+                qxLibs = LibraryUtil.getQxLibs()
+                if not "qooxdoo" in qxLibs:
+                    if self.debug:
+                        print "Searching project config for qooxdoo SDK path..."
+                    fileName = sublime.active_window().active_view().file_name()
+                    libRoot = LibraryUtil.getLibRoot(fileName)
+                    qxPath = LibraryUtil.getQxPath(libRoot)
+                    if qxPath:
+                        qxLibs["qooxdoo"] = os.path.join(qxPath, "framework")
+
+            apiPaths = LibraryUtil.getApiPaths(qxLibs)
+            self.__qxApi = Api(apiPaths)
+            self.__qxApi.debug = self.debug
+
+        return self.__qxApi
 
     def on_query_completions(self, view, prefix, locations):
         # Only trigger within JS
         if not view.match_selector(locations[0], "source.js"):
+            return []
+
+        qxApi = self._getApi()
+        if not qxApi:
             return []
 
         # get the line text from the cursor back to last space
@@ -29,12 +55,12 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
         if queryClass:
             queryClass = queryClass.group(1)
 
-        for className in self.qxApi.getData():
+        for className in qxApi.getData():
             if queryClass and queryClass == className:
                 # the query is a fully qualified class name
                 # Extract the final part of the class name from the query
-                classApi = self.qxApi.getClassApi(queryClass)
-                statics = self.qxApi.getStaticMethods(classApi)
+                classApi = qxApi.getClassApi(queryClass)
+                statics = qxApi.getStaticMethods(classApi)
                 for entry in statics:
                     if prefix in entry[0]:
                         methodName = queryClass + "." + entry[0]
@@ -54,11 +80,11 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
 
                 if isClass and (queryDepth >= matchDepth - 1):
                     # the match is a class, get the constructor params
-                    classApi = self.qxApi.getClassApi(className)
-                    constructor = self.qxApi.getConstructor(classApi)
+                    classApi = qxApi.getClassApi(className)
+                    constructor = qxApi.getConstructor(classApi)
                     if constructor:
                         isStatic = False
-                        params = self.qxApi.getMethodParams(constructor)
+                        params = qxApi.getMethodParams(constructor)
 
                 # query is a partial class name
                 completion = prefix + className[len(lineText):]
@@ -83,7 +109,7 @@ class QxAutoCompleteCommand(sublime_plugin.EventListener):
             return result
 
 
-class QxApi():
+class Api():
     def __init__(self, apiPaths):
         self.debug = False
         self.__apiPaths = apiPaths
@@ -171,3 +197,104 @@ class QxApi():
                             if "attributes" in param and "name" in param["attributes"]:
                                 params.append(param["attributes"]["name"])
         return params
+
+
+class LibraryUtil():
+
+    @staticmethod
+    def getQxLibName(manifestPath):
+        if not os.path.isfile(manifestPath):
+            return None
+        try:
+            manifest = json.load(open(manifestPath, "r"))
+            if "info" in manifest and "qooxdoo-versions" in manifest["info"]:
+                # looks like a valid qx library manifest
+                if "name" in manifest["info"]:
+                    return manifest["info"]["name"]
+        except Exception:
+            qxV = LibraryUtil.findJsonValue(open(manifestPath, "r"), "qooxdoo-versions")
+            if qxV:
+                return LibraryUtil.findJsonValue(open(manifestPath, "r"), "name")
+
+        return None
+
+    @staticmethod
+    def getQxPath(libRoot):
+        qxPath = None
+        libConfig = os.path.join(libRoot, "config.json")
+
+        if (os.path.isfile(libConfig)):
+            if LibraryUtil.debug:
+                print "Found project config at %s." % libConfig
+            try:
+                config = json.load(open(libConfig, "r"))
+                if "let" in config and "QOOXDOO_PATH" in config["let"]:
+                    qxPath = config["let"]["QOOXDOO_PATH"]
+            except Exception:
+                qxPath = LibraryUtil.findJsonValue(open(libConfig, "r"), "QOOXDOO_PATH")
+
+            if qxPath:
+                qxPath = os.path.abspath(os.path.join(libRoot, qxPath))
+
+        return qxPath
+
+    @staticmethod
+    def getApiPaths(qxLibs):
+        apiPaths = []
+        libNames = qxLibs.keys()
+        if "qooxdoo" in libNames:
+            libNames.remove("qooxdoo")
+            libNames.insert(0, "qooxdoo")
+
+        for qxLibName in libNames:
+            libPath = qxLibs[qxLibName]
+            if LibraryUtil.debug:
+                    print "Looking for '%s' API data..." % qxLibName
+            apiPath = os.path.join(libPath, "api", "script")
+            if os.path.isdir(apiPath):
+                if LibraryUtil.debug:
+                    print "Found API data for library %s in directory %s." % (qxLibName, apiPath)
+                apiPaths.append(apiPath)
+
+        return apiPaths
+
+    @staticmethod
+    def findJsonValue(handle, key):
+        regExp = '"%s"\s*?:\s*?(.*?)\s*?\,?$' % key
+        for line in handle:
+            match = re.search(regExp, line)
+            if match and not "//" in line.split(key)[0]:
+                return match.group(1).replace('"', '').strip()
+
+        return None
+
+    @staticmethod
+    def getLibRoot(fileName):
+        if LibraryUtil.debug:
+            print "Searching for library root of '%s'..." % fileName
+        dirName = os.path.dirname(fileName)
+        dirName = dirName.split(os.sep)
+        while len(dirName) > 0:
+            currentDir = os.sep.join(dirName)
+            manifest = os.path.join(currentDir, "Manifest.json")
+            if (os.path.isfile(manifest)):
+                if LibraryUtil.debug:
+                    print "Root directory is %s." % currentDir
+                return currentDir
+            dirName.pop()
+
+        return None
+
+    @staticmethod
+    def getQxLibs():
+        qxLibs = {}
+        folders = sublime.active_window().folders()
+        for folder in folders:
+            manifestPath = os.path.join(folder, "Manifest.json")
+            qxLibName = LibraryUtil.getQxLibName(manifestPath)
+            if qxLibName and not qxLibName in qxLibs:
+                qxLibs[qxLibName] = os.path.dirname(manifestPath)
+
+        return qxLibs
+
+LibraryUtil.debug = "LibraryUtil" in settings.get("debug")
