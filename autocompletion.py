@@ -82,7 +82,7 @@ class AutoCompletion(sublime_plugin.EventListener):
             elif className.startswith(lineText):
                 params = []
                 namespace = className.split(".")
-                isClass = namespace[-1].istitle()
+                isClass = namespace[-1][0].istitle()
                 isStatic = True
                 queryDepth = len(lineText.split("."))
                 matchDepth = len(className.split("."))
