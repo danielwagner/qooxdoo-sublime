@@ -52,9 +52,15 @@ class AutoCompletion(sublime_plugin.EventListener):
         lineText = re.split('\s', lineText)[-1]
 
         isEnvironmentGet = False
+        isSingletonQuery = False
+
         queryClass = re.search("(.*?[A-Z]\w*)", lineText)
         if queryClass:
             queryClass = queryClass.group(1)
+
+            if lineText.split(".")[-2:-1][0] == "getInstance()":
+                isSingletonQuery = True
+
             if queryClass == "qx.core.Environment" and (prefix == "g" or prefix == "ge" or prefix == "get"):
                 isEnvironmentGet = True
 
@@ -63,27 +69,40 @@ class AutoCompletion(sublime_plugin.EventListener):
                 # the query is a fully qualified class name
                 # Extract the final part of the class name from the query
                 classApi = qxApi.getClassApi(queryClass)
-                statics = qxApi.getStaticMethods(classApi)
+                if isSingletonQuery:
+                    methods = qxApi.getMethods(classApi, "instance")
+                else:
+                    methods = qxApi.getMethods(classApi, "static")
+
                 if isEnvironmentGet:
                     envKeys = qxApi.getEnvironmentKeys(classApi)
                     for key in envKeys:
                         entry = "get" + "(\"%s\")" % key
                         result.append((entry, entry))
                 else:
-                    for entry in statics:
+                    for entry in methods:
                         if prefix in entry[0]:
                             methodName = queryClass + "." + entry[0]
                             if len(entry[1]) > 0:
                                 # place the cursor to the left of the first parameter and select it
                                 entry[1][0] = "${1:%s}" % entry[1][0]
-                            methodWithParams = methodName + "(%s)" % ", ".join(entry[1])
+                            paramStr = "(%s)" % ", ".join(entry[1])
+
+                            if isSingletonQuery:
+                                methodWithParams = entry[0] + paramStr
+                            else:
+                                methodWithParams = methodName + paramStr
+
                             result.append((methodName, methodWithParams))
 
             elif className.startswith(lineText):
-                params = []
                 namespace = className.split(".")
+
+                params = []
                 isClass = namespace[-1][0].istitle()
                 isStatic = True
+                isSingleton = False
+
                 queryDepth = len(lineText.split("."))
                 matchDepth = len(className.split("."))
 
@@ -180,11 +199,15 @@ class Api():
             print "Couldn't load class API for " + className
         return []
 
-    def getStaticMethods(self, classData):
+    def getMethods(self, classData, methodType):
+        if methodType == "instance":
+            methodType = "methods"
+        else:
+            methodType = "methods-static"
         statics = []
         if "children" in classData:
             for child in classData["children"]:
-                if "type" in child and child["type"] == "methods-static":
+                if "type" in child and child["type"] == methodType:
                     for method in child["children"]:
                         methodName = method["attributes"]["name"]
                         if methodName[:2] != "__":
@@ -201,10 +224,6 @@ class Api():
                             if "type" in c and c["type"] == "method":
                                 return c
 
-        superClassName = classData["attributes"]["superClass"]
-        superClass = self.getClassApi(superClassName)
-        if superClass:
-            return self.getConstructor(superClass)
         if "superClass" in classData["attributes"]:
             superClassName = classData["attributes"]["superClass"]
             superClass = self.getClassApi(superClassName)
