@@ -200,6 +200,17 @@ class Api():
                         for c in child["children"]:
                             if "type" in c and c["type"] == "method":
                                 return c
+
+        superClassName = classData["attributes"]["superClass"]
+        superClass = self.getClassApi(superClassName)
+        if superClass:
+            return self.getConstructor(superClass)
+        if "superClass" in classData["attributes"]:
+            superClassName = classData["attributes"]["superClass"]
+            superClass = self.getClassApi(superClassName)
+            if superClass:
+                return self.getConstructor(superClass)
+
         return None
 
     def getMethodParams(self, method):
