@@ -51,9 +51,12 @@ class AutoCompletion(sublime_plugin.EventListener):
         lineText = view.substr(line)
         lineText = re.split('\s', lineText)[-1]
 
+        isEnvironmentGet = False
         queryClass = re.search("(.*?[A-Z]\w*)", lineText)
         if queryClass:
             queryClass = queryClass.group(1)
+            if queryClass == "qx.core.Environment" and (prefix == "g" or prefix == "ge" or prefix == "get"):
+                isEnvironmentGet = True
 
         for className in qxApi.getData():
             if queryClass and queryClass == className:
@@ -61,14 +64,20 @@ class AutoCompletion(sublime_plugin.EventListener):
                 # Extract the final part of the class name from the query
                 classApi = qxApi.getClassApi(queryClass)
                 statics = qxApi.getStaticMethods(classApi)
-                for entry in statics:
-                    if prefix in entry[0]:
-                        methodName = queryClass + "." + entry[0]
-                        if len(entry[1]) > 0:
-                            # place the cursor before the first parameter and select it
-                            entry[1][0] = "${1:%s}" % entry[1][0]
-                        methodWithParams = methodName + "(%s)" % ", ".join(entry[1])
-                        result.append((methodName, methodWithParams))
+                if isEnvironmentGet:
+                    envKeys = qxApi.getEnvironmentKeys(classApi)
+                    for key in envKeys:
+                        entry = "get" + "(\"%s\")" % key
+                        result.append((entry, entry))
+                else:
+                    for entry in statics:
+                        if prefix in entry[0]:
+                            methodName = queryClass + "." + entry[0]
+                            if len(entry[1]) > 0:
+                                # place the cursor to the left of the first parameter and select it
+                                entry[1][0] = "${1:%s}" % entry[1][0]
+                            methodWithParams = methodName + "(%s)" % ", ".join(entry[1])
+                            result.append((methodName, methodWithParams))
 
             elif className.startswith(lineText):
                 params = []
@@ -197,6 +206,20 @@ class Api():
                             if "attributes" in param and "name" in param["attributes"]:
                                 params.append(param["attributes"]["name"])
         return params
+
+    def getEnvironmentKeys(self, envApi):
+        reg = re.compile(r"\<td\>([\w\.]+?)\<\/td\>", re.M)
+        envKeys = []
+        if "children" in envApi:
+            for child in envApi["children"]:
+                if "type" in child and child["type"] == "desc":
+                    if "attributes" in child and "text" in child["attributes"]:
+                        desc = child["attributes"]["text"]
+                        match = reg.findall(desc)
+                        if match:
+                            match.sort()
+                            envKeys = match
+        return envKeys
 
 
 class LibraryUtil():
