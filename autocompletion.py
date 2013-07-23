@@ -90,10 +90,13 @@ class AutoCompletion(sublime_plugin.EventListener):
                 if isClass and (queryDepth >= matchDepth - 1):
                     # the match is a class, get the constructor params
                     classApi = qxApi.getClassApi(className)
-                    constructor = qxApi.getConstructor(classApi)
-                    if constructor:
-                        isStatic = False
-                        params = qxApi.getMethodParams(constructor)
+                    isSingleton = qxApi.isSingleton(classApi)
+
+                    if not isSingleton:
+                        constructor = qxApi.getConstructor(classApi)
+                        if constructor:
+                            isStatic = False
+                            params = qxApi.getMethodParams(constructor)
 
                 # query is a partial class name
                 completion = prefix + className[len(lineText):]
@@ -101,11 +104,14 @@ class AutoCompletion(sublime_plugin.EventListener):
                 # Sublime will replace the entire lineText so we need the full name
                 if not "." in completion:
                     completion = className
-                if isClass and not isStatic:
-                    if len(params) > 0:
-                        # place the cursor before the first parameter and select it
-                        params[0] = "${1:%s}" % params[0]
-                    completion = completion + "(%s)" % ", ".join(params)
+                if isClass:
+                    if isSingleton:
+                        completion = completion + ".getInstance()"
+                    if not isStatic:
+                        if len(params) > 0:
+                            # place the cursor before the first parameter and select it
+                            params[0] = "${1:%s}" % params[0]
+                        completion = completion + "(%s)" % ", ".join(params)
                 if self.debug:
                     print "prefix: %s, lineText: %s, className %s, completion: %s" % (prefix, lineText, className, completion)
 
@@ -206,6 +212,12 @@ class Api():
                             if "attributes" in param and "name" in param["attributes"]:
                                 params.append(param["attributes"]["name"])
         return params
+
+    def isSingleton(self, classData):
+        if "attributes" in classData and "isSingleton" in classData["attributes"]:
+                return classData["attributes"]["isSingleton"]
+
+        return False
 
     def getEnvironmentKeys(self, envApi):
         reg = re.compile(r"\<td\>([\w\.]+?)\<\/td\>", re.M)
