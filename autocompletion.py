@@ -71,10 +71,10 @@ class AutoCompletion(sublime_plugin.EventListener):
 
         for className in qxApi.getData():
             if queryClass and queryClass == className:
-                result.extend(qxApi.getClassCompletions(className, isEnvironmentGet, isSingletonQuery, isInstantiation))
+                result.extend(qxApi.getClassCompletions(className, isEnvironmentGet, isSingletonQuery))
 
             if className.startswith(lineText):
-                result.extend(qxApi.getPartialCompletions(className, prefix, lineText))
+                result.extend(qxApi.getPartialCompletions(className, prefix, lineText, isInstantiation))
 
         if len(result) > 0:
             result.sort()
@@ -90,7 +90,7 @@ class Api():
         self.__classApi = {}
         self.__apiData = None
 
-    def getClassCompletions(self, className, isEnvironmentGet, isSingletonQuery, isInstantiation):
+    def getClassCompletions(self, className, isEnvironmentGet, isSingletonQuery):
         result = []
         methods = []
         classApi = self.getClassApi(className)
@@ -109,7 +109,6 @@ class Api():
             methods = self.getMethods(classApi, "static")
 
         for entry in methods:
-            #if prefix in entry[0]:
             if isSingletonQuery:
                 methodName = className + "." + entry[0]
                 paramStr = "(%s)" % ", ".join(entry[1])
@@ -132,7 +131,7 @@ class Api():
 
         return result
 
-    def getPartialCompletions(self, className, prefix, lineText):
+    def getPartialCompletions(self, className, prefix, lineText, isInstantiation):
         result = []
         namespace = className.split(".")
 
@@ -147,9 +146,10 @@ class Api():
         if isClass and (queryDepth >= matchDepth - 1):
             # the match is a class, get the constructor params
             classApi = self.getClassApi(className)
+
             isSingleton = self.isSingleton(classApi)
 
-            if not isSingleton:
+            if isInstantiation:
                 constructor = self.getConstructor(classApi)
                 if constructor:
                     isStatic = False
