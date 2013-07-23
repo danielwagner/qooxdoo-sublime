@@ -43,16 +43,21 @@ class AutoCompletion(sublime_plugin.EventListener):
         if not qxApi:
             return []
 
+        isEnvironmentGet = False
+        isSingletonQuery = False
+        isInstantiation = False
+
         # get the line text from the cursor back to last space
         result = []
         sel = view.sel()
         region = sel[0]
         line = view.line(region)
         lineText = view.substr(line)
-        lineText = re.split('\s', lineText)[-1]
+        temp = re.split('\s', lineText)
+        lineText = temp[-1]
 
-        isEnvironmentGet = False
-        isSingletonQuery = False
+        if temp[-2] and temp[-2] == "new":
+            isInstantiation = True
 
         queryClass = re.search("(.*?[A-Z]\w*)", lineText)
         if queryClass:
@@ -66,75 +71,10 @@ class AutoCompletion(sublime_plugin.EventListener):
 
         for className in qxApi.getData():
             if queryClass and queryClass == className:
-                # the query is a fully qualified class name
-                # Extract the final part of the class name from the query
-                classApi = qxApi.getClassApi(queryClass)
-                if isSingletonQuery:
-                    methods = qxApi.getMethods(classApi, "instance")
-                else:
-                    methods = qxApi.getMethods(classApi, "static")
+                result.extend(qxApi.getClassCompletions(className, isEnvironmentGet, isSingletonQuery, isInstantiation))
 
-                if isEnvironmentGet:
-                    envKeys = qxApi.getEnvironmentKeys(classApi)
-                    for key in envKeys:
-                        entry = "get" + "(\"%s\")" % key
-                        result.append((entry, entry))
-                else:
-                    for entry in methods:
-                        if prefix in entry[0]:
-                            methodName = queryClass + "." + entry[0]
-                            if len(entry[1]) > 0:
-                                # place the cursor to the left of the first parameter and select it
-                                entry[1][0] = "${1:%s}" % entry[1][0]
-                            paramStr = "(%s)" % ", ".join(entry[1])
-
-                            if isSingletonQuery:
-                                methodWithParams = entry[0] + paramStr
-                            else:
-                                methodWithParams = methodName + paramStr
-
-                            result.append((methodName, methodWithParams))
-
-            elif className.startswith(lineText):
-                namespace = className.split(".")
-
-                params = []
-                isClass = namespace[-1][0].istitle()
-                isStatic = True
-                isSingleton = False
-
-                queryDepth = len(lineText.split("."))
-                matchDepth = len(className.split("."))
-
-                if isClass and (queryDepth >= matchDepth - 1):
-                    # the match is a class, get the constructor params
-                    classApi = qxApi.getClassApi(className)
-                    isSingleton = qxApi.isSingleton(classApi)
-
-                    if not isSingleton:
-                        constructor = qxApi.getConstructor(classApi)
-                        if constructor:
-                            isStatic = False
-                            params = qxApi.getMethodParams(constructor)
-
-                # query is a partial class name
-                completion = prefix + className[len(lineText):]
-                # If there's no dot (or maybe word boundary?) in the completion,
-                # Sublime will replace the entire lineText so we need the full name
-                if not "." in completion:
-                    completion = className
-                if isClass:
-                    if isSingleton:
-                        completion = completion + ".getInstance()"
-                    if not isStatic:
-                        if len(params) > 0:
-                            # place the cursor before the first parameter and select it
-                            params[0] = "${1:%s}" % params[0]
-                        completion = completion + "(%s)" % ", ".join(params)
-                if self.debug:
-                    print "prefix: %s, lineText: %s, className %s, completion: %s" % (prefix, lineText, className, completion)
-
-                result.append((className, completion))
+            if className.startswith(lineText):
+                result.extend(qxApi.getPartialCompletions(className, prefix, lineText))
 
         if len(result) > 0:
             result.sort()
@@ -149,6 +89,91 @@ class Api():
         self.__apiPaths = apiPaths
         self.__classApi = {}
         self.__apiData = None
+
+    def getClassCompletions(self, className, isEnvironmentGet, isSingletonQuery, isInstantiation):
+        result = []
+        methods = []
+        classApi = self.getClassApi(className)
+
+        if isSingletonQuery:
+            methods = self.getMethods(classApi, "instance")
+
+        elif isEnvironmentGet:
+            envKeys = self.getEnvironmentKeys(classApi)
+            for key in envKeys:
+                keyName = "\"%s\"" % key
+                entry = ("get", [keyName])
+                methods.append(entry)
+
+        else:
+            methods = self.getMethods(classApi, "static")
+
+        for entry in methods:
+            #if prefix in entry[0]:
+            if isSingletonQuery:
+                methodName = className + "." + entry[0]
+                paramStr = "(%s)" % ", ".join(entry[1])
+                methodWithParams = entry[0] + paramStr
+
+            elif isEnvironmentGet:
+                paramStr = "(%s)" % ", ".join(entry[1])
+                methodName = entry[0] + paramStr
+                methodWithParams = entry[0] + paramStr
+
+            else:
+                methodName = className + "." + entry[0]
+                paramStr = "(%s)" % ", ".join(entry[1])
+                methodWithParams = methodName + paramStr
+                if len(entry[1]) > 0:
+                    # place the cursor to the left of the first parameter and select it
+                    entry[1][0] = "${1:%s}" % entry[1][0]
+
+            result.append((methodName, methodWithParams))
+
+        return result
+
+    def getPartialCompletions(self, className, prefix, lineText):
+        result = []
+        namespace = className.split(".")
+
+        params = []
+        isClass = namespace[-1][0].istitle()
+        isStatic = True
+        isSingleton = False
+
+        queryDepth = len(lineText.split("."))
+        matchDepth = len(className.split("."))
+
+        if isClass and (queryDepth >= matchDepth - 1):
+            # the match is a class, get the constructor params
+            classApi = self.getClassApi(className)
+            isSingleton = self.isSingleton(classApi)
+
+            if not isSingleton:
+                constructor = self.getConstructor(classApi)
+                if constructor:
+                    isStatic = False
+                    params = self.getMethodParams(constructor)
+
+        completion = prefix + className[len(lineText):]
+        # If there's no dot (or maybe word boundary?) in the completion,
+        # Sublime will replace the entire lineText so we need the full name
+        if not "." in completion:
+            completion = className
+        if isClass:
+            if isSingleton:
+                completion = completion + ".getInstance()"
+            if not isStatic:
+                if len(params) > 0:
+                    # place the cursor before the first parameter and select it
+                    params[0] = "${1:%s}" % params[0]
+                completion = completion + "(%s)" % ", ".join(params)
+        if self.debug:
+            print "prefix: %s, lineText: %s, className %s, completion: %s" % (prefix, lineText, className, completion)
+
+        result.append((className, completion))
+
+        return result
 
     def getData(self):
         if not self.__apiData:
@@ -204,7 +229,7 @@ class Api():
             methodType = "methods"
         else:
             methodType = "methods-static"
-        statics = []
+        methods = []
         if "children" in classData:
             for child in classData["children"]:
                 if "type" in child and child["type"] == methodType:
@@ -212,8 +237,8 @@ class Api():
                         methodName = method["attributes"]["name"]
                         if methodName[:2] != "__":
                             params = self.getMethodParams(method)
-                            statics.append((methodName, params))
-        return statics
+                            methods.append((methodName, params))
+        return methods
 
     def getConstructor(self, classData):
         if "children" in classData:
