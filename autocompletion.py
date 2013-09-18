@@ -49,14 +49,22 @@ class AutoCompletion(sublime_plugin.EventListener):
 
         # get the line text from the cursor back to last space
         result = []
+         #selection RegionSet
         sel = view.sel()
         region = sel[0]
+        # line containing the selection
         line = view.line(region)
+
+        start = line.a
+        end = sel[0].a
+        leftOfCursor = sublime.Region(start, end)
+
         lineText = view.substr(line)
-        temp = re.split('\s', lineText)
+        lineTextNew = view.substr(leftOfCursor)
+        temp = re.split('\s', lineTextNew)
         lineText = temp[-1]
 
-        if temp[-2] and temp[-2] == "new":
+        if temp[-2] and temp[-2][-3:] == "new":
             isInstantiation = True
 
         queryClass = re.search("(.*?[A-Z]\w*)", lineText)
