@@ -59,9 +59,8 @@ class AutoCompletion(sublime_plugin.EventListener):
         end = sel[0].a
         leftOfCursor = sublime.Region(start, end)
 
-        lineText = view.substr(line)
         lineTextNew = view.substr(leftOfCursor)
-        temp = re.split('\s', lineTextNew)
+        temp = re.split("[^\w\.]", lineTextNew)
         lineText = temp[-1]
 
         if temp[-2] and temp[-2][-3:] == "new":
