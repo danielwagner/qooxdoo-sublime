@@ -63,7 +63,7 @@ class AutoCompletion(sublime_plugin.EventListener):
         temp = re.split("[^\w\.]", lineTextNew)
         lineText = temp[-1]
 
-        if temp[-2] and temp[-2][-3:] == "new":
+        if len(temp) > 1 and temp[-2] and temp[-2][-3:] == "new":
             isInstantiation = True
 
         queryClass = re.search("(.*?[A-Z]\w*)", lineText)
