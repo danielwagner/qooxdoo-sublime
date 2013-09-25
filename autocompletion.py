@@ -46,6 +46,7 @@ class AutoCompletion(sublime_plugin.EventListener):
         isEnvironmentGet = False
         isSingletonQuery = False
         isInstantiation = False
+        queryClass = None
 
         # get the line text from the cursor back to last space
         result = []
@@ -63,15 +64,17 @@ class AutoCompletion(sublime_plugin.EventListener):
         temp = re.split("[^\w\.]", lineTextNew)
         lineText = temp[-1]
 
+        if len(temp) > 2 and temp[-3].endswith(".getInstance"):
+            queryClass = ".".join(temp[-3].split(".")[0:-1])
+            isSingletonQuery = True
+
         if len(temp) > 1 and temp[-2] and temp[-2][-3:] == "new":
             isInstantiation = True
 
-        queryClass = re.search("(.*?[A-Z]\w*)", lineText)
-        if queryClass:
-            queryClass = queryClass.group(1)
-
-            if lineText.split(".")[-2:-1][0] == "getInstance()":
-                isSingletonQuery = True
+        if not queryClass:
+            queryClass = re.search("(.*?[A-Z]\w*)", lineText)
+            if queryClass:
+                queryClass = queryClass.group(1)
 
             if queryClass == "qx.core.Environment" and (prefix == "g" or prefix == "ge" or prefix == "get"):
                 isEnvironmentGet = True
@@ -104,6 +107,7 @@ class Api():
 
         if isSingletonQuery:
             methods = self.getMethods(classApi, "instance")
+            print "YO " + repr(methods)
 
         elif isEnvironmentGet:
             envKeys = self.getEnvironmentKeys(classApi)
