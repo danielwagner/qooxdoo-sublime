@@ -17,11 +17,11 @@ class AutoCompletion(sublime_plugin.EventListener):
             qxLibs = settings.get("libraries")
             if not qxLibs or len(qxLibs) == 0:
                 if self.debug:
-                    print "No libraries configured in qooxdoo.sublime-settings, scanning project folders."
+                    print("No libraries configured in qooxdoo.sublime-settings, scanning project folders.")
                 qxLibs = LibraryUtil.getQxLibs()
                 if not "qooxdoo" in qxLibs:
                     if self.debug:
-                        print "Searching project config for qooxdoo SDK path..."
+                        print("Searching project config for qooxdoo SDK path...")
                     fileName = sublime.active_window().active_view().file_name()
                     libRoot = LibraryUtil.getLibRoot(fileName)
                     qxPath = LibraryUtil.getQxPath(libRoot)
@@ -107,7 +107,6 @@ class Api():
 
         if isSingletonQuery:
             methods = self.getMethods(classApi, "instance")
-            print "YO " + repr(methods)
 
         elif isEnvironmentGet:
             envKeys = self.getEnvironmentKeys(classApi)
@@ -180,7 +179,7 @@ class Api():
                     params[0] = "${1:%s}" % params[0]
                 completion = completion + "(%s)" % ", ".join(params)
         if self.debug:
-            print "prefix: %s, lineText: %s, className %s, completion: %s" % (prefix, lineText, className, completion)
+            print("prefix: %s, lineText: %s, className %s, completion: %s" % (prefix, lineText, className, completion))
 
         result.append((className, completion))
 
@@ -200,7 +199,7 @@ class Api():
 
             if os.path.isfile(indexPath):
                 if self.debug:
-                    print "Collecting API data from file system path %s" % (indexPath)
+                    print("Collecting API data from file system path %s" % (indexPath))
                 libData = self._loadDataFromFile(indexPath)
             else:
                 sublime.error_message("Couldn't load API data: %s does not exist!\nPlease make sure the correct path is configured in Packages/qooxdoo-sublime/qooxdoo.sublime-settings and API data has been generated for the qx library (generate.py api)." % indexPath)
@@ -232,7 +231,7 @@ class Api():
                 self.__classApi[className] = classData
                 return classData
         if self.debug:
-            print "Couldn't load class API for " + className
+            print("Couldn't load class API for " + className)
         return []
 
     def getMethods(self, classData, methodType):
@@ -326,7 +325,7 @@ class LibraryUtil():
 
         if (os.path.isfile(libConfig)):
             if LibraryUtil.debug:
-                print "Found project config at %s." % libConfig
+                print("Found project config at %s." % libConfig)
             try:
                 config = json.load(open(libConfig, "r"))
                 if "let" in config and "QOOXDOO_PATH" in config["let"]:
@@ -342,7 +341,7 @@ class LibraryUtil():
     @staticmethod
     def getApiPaths(qxLibs):
         apiPaths = []
-        libNames = qxLibs.keys()
+        libNames = list(qxLibs)
         if "qooxdoo" in libNames:
             libNames.remove("qooxdoo")
             libNames.insert(0, "qooxdoo")
@@ -350,11 +349,11 @@ class LibraryUtil():
         for qxLibName in libNames:
             libPath = qxLibs[qxLibName]
             if LibraryUtil.debug:
-                    print "Looking for '%s' API data..." % qxLibName
+                    print("Looking for '%s' API data..." % qxLibName)
             apiPath = os.path.join(libPath, "api", "script")
             if os.path.isdir(apiPath):
                 if LibraryUtil.debug:
-                    print "Found API data for library %s in directory %s." % (qxLibName, apiPath)
+                    print("Found API data for library %s in directory %s." % (qxLibName, apiPath))
                 apiPaths.append(apiPath)
 
         return apiPaths
@@ -372,7 +371,7 @@ class LibraryUtil():
     @staticmethod
     def getLibRoot(fileName):
         if LibraryUtil.debug:
-            print "Searching for library root of '%s'..." % fileName
+            print("Searching for library root of '%s'..." % fileName)
         dirName = os.path.dirname(fileName)
         dirName = dirName.split(os.sep)
         while len(dirName) > 0:
@@ -380,7 +379,7 @@ class LibraryUtil():
             manifest = os.path.join(currentDir, "Manifest.json")
             if (os.path.isfile(manifest)):
                 if LibraryUtil.debug:
-                    print "Root directory is %s." % currentDir
+                    print("Root directory is %s." % currentDir)
                 return currentDir
             dirName.pop()
 
